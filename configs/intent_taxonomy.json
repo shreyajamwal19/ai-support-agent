@@ -1,0 +1,156 @@
+{
+  "version": "1.0",
+  "brand": "AmazonHelp",
+  "derived_from": "artifacts/data_quality/taxonomy_clusters_en.json (TF-IDF + MiniBatchKMeans, k=12, English-filtered baseline_eval_pool)",
+  "notes": "Names/boundaries were assigned by hand after inspecting cluster top-terms and example messages. Clusters were consolidated (e.g. the 3 delivery-related clusters -> DELIVERY_STATUS + DELIVERY_QUALITY) and 2 were rejected as not distinct intents ('Yes'/short acknowledgements is a dialogue-act, not an intent; folded into whichever intent the surrounding context implies).",
+  "intents": [
+    {
+      "id": "ORDER_STATUS",
+      "name": "Order / Delivery Status Inquiry",
+      "description": "Customer wants to know where an order or package is, or is reporting a delay.",
+      "inclusion_criteria": "Message asks for tracking/ETA, or states an order/package has not arrived by expected date.",
+      "exclusion_criteria": "Package arrived but is damaged/wrong item (-> DELIVERY_QUALITY_ISSUE). Asking for a refund because of delay (-> REFUND_RETURN) unless status is the primary ask.",
+      "representative_examples": [
+        "Where is my order? [URL]",
+        "My order is due to arrive on Friday",
+        "hey amazon, my echo dot is taking 4 days to be delivered even though I am in Mumbai."
+      ],
+      "common_confusions": ["DELIVERY_QUALITY_ISSUE", "REFUND_RETURN"]
+    },
+    {
+      "id": "DELIVERY_QUALITY_ISSUE",
+      "name": "Delivery / Package Quality Problem",
+      "description": "Package delivered but damaged, wrong item, delivered to wrong address, or marked delivered but not received.",
+      "inclusion_criteria": "Explicit statement of a completed-but-flawed delivery: damage, wrong item, wrong recipient, false 'delivered' status.",
+      "exclusion_criteria": "Order still in transit and simply late (-> ORDER_STATUS).",
+      "representative_examples": [
+        "it'd be nice if the book I waited 4 months for wasn't damaged inside of an undented box.",
+        "Package yet to be received. The delivery boy must've signed himself or delivered to someone else.",
+        "I don't have an amazon account. The parcel has been delivered to the wrong address."
+      ],
+      "common_confusions": ["ORDER_STATUS", "REFUND_RETURN"]
+    },
+    {
+      "id": "REFUND_RETURN",
+      "name": "Refund / Return / Replacement Request",
+      "description": "Customer explicitly wants money back, a replacement item, or is initiating/complaining about a return.",
+      "inclusion_criteria": "Contains explicit ask for refund/return/replacement/compensation, or complains a refund wasn't given.",
+      "exclusion_criteria": "General dissatisfaction with no explicit refund/return ask (-> COMPLAINT_SERVICE_QUALITY).",
+      "representative_examples": [
+        "I want refund amount, amazon seller was lying.",
+        "Do not make us helpless and kindly refund my amount.",
+        "req a replace for one of my purchase it was scheduled for today"
+      ],
+      "common_confusions": ["COMPLAINT_SERVICE_QUALITY", "ORDER_STATUS"]
+    },
+    {
+      "id": "ACCOUNT_LOGIN",
+      "name": "Account Access / Login / Verification",
+      "description": "Problems logging in, 2FA/verification codes not arriving, account locked/blocked.",
+      "inclusion_criteria": "Mentions login, password, verification code, 2-step, account being blocked/locked.",
+      "exclusion_criteria": "Billing/payment method issues without a login component (-> BILLING_PAYMENT).",
+      "representative_examples": [
+        "Im not receiving 2step code by text or call in my smartphone can't log in into my account",
+        "It's not allowing me to update it to register my new amazon account.",
+        "germany blocked my account for CC check several months ago"
+      ],
+      "common_confusions": ["BILLING_PAYMENT"]
+    },
+    {
+      "id": "BILLING_PAYMENT",
+      "name": "Billing / Payment / Charges",
+      "description": "Disputes or questions about charges, payment methods, gift cards, being charged incorrectly.",
+      "inclusion_criteria": "Mentions being charged, card declined, payment method, gift card balance/redemption.",
+      "exclusion_criteria": "Refund of a specific order (-> REFUND_RETURN) unless the core issue is the payment mechanism itself.",
+      "representative_examples": [
+        "No i've already done that and you have taken more money out of my bank!",
+        "no luck on receiving the code by text or call, will I loose my account"
+      ],
+      "common_confusions": ["REFUND_RETURN", "ACCOUNT_LOGIN"]
+    },
+    {
+      "id": "PRIME_MEMBERSHIP",
+      "name": "Prime Membership",
+      "description": "Questions or complaints specifically about Prime membership, benefits, or cancellation.",
+      "inclusion_criteria": "Explicit mention of 'Prime' membership status, benefits, shipping tier, or cancellation.",
+      "exclusion_criteria": "General shipping speed complaint with no Prime framing (-> ORDER_STATUS).",
+      "representative_examples": [
+        "Two fake items in one day. Time to cancel my Amazon Prime membership.",
+        "what is the use of Prime Membership if I am not getting my parcel on time.",
+        "So much of the programming has changed on Prime."
+      ],
+      "common_confusions": ["ORDER_STATUS", "DIGITAL_CONTENT_DEVICE"]
+    },
+    {
+      "id": "DIGITAL_CONTENT_DEVICE",
+      "name": "Digital Content / Device Support",
+      "description": "Issues with Kindle, Echo/Alexa, Fire TV, Amazon Music/Prime Video apps or hardware.",
+      "inclusion_criteria": "Names a specific Amazon device or digital service and describes a functional problem.",
+      "exclusion_criteria": "Order/delivery issue for a device purchase, not a functional/software problem (-> ORDER_STATUS).",
+      "representative_examples": [
+        "My Kindle not working properly is breaking my heart!",
+        "Trying to get a friend's playlist on my Amazon music app but it keeps giving me the following message",
+        "please teach Alexa slang. I've been trying to play a song for 30 minutes."
+      ],
+      "common_confusions": ["OTHER_UNCLEAR"]
+    },
+    {
+      "id": "COMPLAINT_SERVICE_QUALITY",
+      "name": "General Service Quality Complaint",
+      "description": "Complaint about customer service experience/quality itself (rudeness, unhelpfulness, being ignored), without a specific transactional ask.",
+      "inclusion_criteria": "Primary content is evaluative language about service quality ('worst customer service', 'no one helped me') without a concrete order/refund/account ask as the main point.",
+      "exclusion_criteria": "If a concrete ask (refund, order status) is present, classify by that ask instead.",
+      "representative_examples": [
+        "I waited 15 days, sent 10 emails, was assured the case was escalated, today's response WE CANNOT HELP.",
+        "Hahaha. Reported multiple times...even spoke to ur so called customer service.. no help...",
+        "s/o to Amer at customer service for being helpful and understanding"
+      ],
+      "common_confusions": ["REFUND_RETURN"]
+    },
+    {
+      "id": "PRODUCT_INFO_QUESTION",
+      "name": "Pre-purchase / Product Information Question",
+      "description": "Customer asking a question about a product, listing, or policy before or independent of a transaction problem.",
+      "inclusion_criteria": "Question-form message about product availability, specs, or policy with no indication of an existing order problem.",
+      "exclusion_criteria": "Question about an existing order's status (-> ORDER_STATUS).",
+      "representative_examples": [
+        "kann man Prime auch mit einem Gutschein bezahlen?",
+        "Does your app have a feedback option \"product not delivered\"?"
+      ],
+      "common_confusions": ["ORDER_STATUS", "OTHER_UNCLEAR"]
+    },
+    {
+      "id": "ACKNOWLEDGEMENT_FOLLOWUP",
+      "name": "Acknowledgement / Follow-up in Existing Thread",
+      "description": "Short reply that only makes sense with prior context: confirmations, 'yes', 'details sent', thanks with no new content.",
+      "inclusion_criteria": "Message is a short dialogue-act continuing a prior thread (confirmation, thanks, 'done') rather than introducing new content.",
+      "exclusion_criteria": "If the short message introduces a new concrete issue, classify by that issue instead.",
+      "representative_examples": ["Details sent. Please check.", "Yes shipped yesterday", "Yes, I've sent an email through your link."],
+      "common_confusions": ["OTHER_UNCLEAR"]
+    },
+    {
+      "id": "ABUSE_THREAT_ESCALATION_DEMAND",
+      "name": "Abusive / Legal Threat / Explicit Escalation Demand",
+      "description": "Message contains hostility/profanity directed at the brand, legal/regulatory threats, or explicit demand to speak to a manager/corporate.",
+      "inclusion_criteria": "Profanity/hostility directed at brand or staff, legal threat, or explicit 'let me speak to a manager/corporate' demand.",
+      "exclusion_criteria": "Frustration expressed without hostility or explicit escalation demand (-> COMPLAINT_SERVICE_QUALITY).",
+      "representative_examples": [
+        "your reps dont even check any back data they just rape the customers.",
+        "Want to speak to someone at corp to address these issues."
+      ],
+      "common_confusions": ["COMPLAINT_SERVICE_QUALITY"]
+    },
+    {
+      "id": "OTHER_UNCLEAR",
+      "name": "Other / Unclear",
+      "description": "Message is off-topic (promotional, unrelated commentary), too ambiguous to classify, or does not fit any intent above.",
+      "inclusion_criteria": "No clear support ask; spam-like; ambiguous fragment; positive unsolicited mention with no request.",
+      "exclusion_criteria": "N/A -- catch-all.",
+      "representative_examples": [
+        "Anna Inspired in idea lab at school to be package being shipped to Narnia! \"Amazon can go anywhere\" according to Anna.",
+        "Super happy to have received my new toy #EchoShow #BlackFriday."
+      ],
+      "common_confusions": ["all others, low-confidence cases"]
+    }
+  ]
+}
