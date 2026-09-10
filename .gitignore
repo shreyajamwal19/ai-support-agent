@@ -24,3 +24,5 @@ artifacts/index/*.pkl
 # OS
 .DS_Store
 data/processed/
+artifacts/index/
+artifacts/models/
