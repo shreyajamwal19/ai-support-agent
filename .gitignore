@@ -1,0 +1,25 @@
+# Raw dataset - never commit (large, licensed via Kaggle ToS)
+data/raw/
+*.csv
+!data/samples/*.csv
+!data/golden/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Env / secrets
+.env
+*.key
+
+# Artifacts that are large/regenerable
+artifacts/embeddings/*.npy
+artifacts/index/*.faiss
+artifacts/index/*.pkl
+*.parquet
+
+# OS
+.DS_Store
