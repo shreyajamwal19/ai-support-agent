@@ -1,0 +1,6 @@
+golden_set: data/golden/golden_set_reviewed.csv
+retrieval_pool: data/processed/retrieval_pool_en.parquet
+only_reviewed_subset: true   # if true, restrict metrics to labeling_status == claude_reviewed_not_independent_human
+                              # (the only non-circular labels available -- see REPORT.md)
+output_dir: artifacts/eval_results
+seed: 42

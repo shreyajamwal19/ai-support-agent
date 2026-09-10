@@ -26,3 +26,4 @@ artifacts/index/*.pkl
 data/processed/
 artifacts/index/
 artifacts/models/
+artifacts/eval_results/
