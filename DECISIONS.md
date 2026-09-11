@@ -1,0 +1,148 @@
+# Decision Log
+
+15 non-obvious decisions made while building this, with alternatives considered and the
+tradeoff accepted. Ordered roughly by when they were made.
+
+---
+
+**1. Brand: AmazonHelp, not the highest-engagement or "easiest" brand.**
+- Alternatives: AppleSupport (highest volume among "clean" brands), Uber_Support, Delta.
+- Why: measured DM-deflection rate (`scripts/03_deflection_check.py`) showed AmazonHelp at
+  0.6% vs. 16.5-71.5% for every other top-volume candidate. A brand whose public replies are
+  mostly "please DM us" has nothing to ground a public-grounding system on.
+- Tradeoff: Amazon is the most heterogeneous business in the candidate set (retail + devices
+  + digital + payments), making a single clean taxonomy harder than for a single-product
+  brand like Spotify.
+
+**2. Single-label intent taxonomy for a naturally multi-label domain.**
+- Alternatives: multi-label classification; hierarchical taxonomy (issue family -> sub-issue).
+- Why: 150-250 golden examples cannot support reliable per-combination multi-label metrics.
+  Escalation-relevant properties (abuse, financial risk) are handled as a *separate* policy
+  layer (Phase 9) instead of folding them into the intent label, so a refund request that is
+  also abusive still escalates correctly without needing a compound intent label.
+- Tradeoff: some information loss for genuinely dual-purpose messages; documented as a known
+  limitation, not hidden.
+
+**3. Deterministic hash-bucket splits instead of `random.sample(seed=...)`.**
+- Alternatives: sklearn `train_test_split` with a fixed seed.
+- Why: hash-bucket splits are reproducible across Python/numpy versions and, critically,
+  guarantee that near-duplicate customer messages (same `content_hash`) always land in the
+  *same* split rather than risking a retry/duplicate leaking across golden/retrieval.
+- Tradeoff: less control over exact split proportions (we get ~15/15/70%, not a clean
+  round number) -- acceptable given leakage-safety is the higher priority.
+
+**4. English-only scoping, decided *after* seeing real cluster output, not upfront.**
+- Alternatives: multilingual taxonomy; translate-then-classify.
+- Why: `scripts/04_taxonomy_clustering.py`'s first (unfiltered) run showed clusters
+  dominated by German/Japanese/French/Spanish text and off-topic promotional tweets. A
+  12-intent taxonomy across 5+ languages was out of scope for a take-home; ~75% of the
+  reconstructed pairs are English, still leaving >100k retrieval-pool pairs.
+- Tradeoff: the system is not usable as-is for non-English AmazonHelp traffic; flagged in
+  REPORT.md as a real production gap, not silently dropped.
+
+**5. OTHER_UNCLEAR capped in golden-set sampling instead of sampled proportionally.**
+- Alternatives: pure proportional stratified sampling (would put ~130/238 slots into
+  OTHER_UNCLEAR, since it's 66% of the raw pool).
+- Why: a golden set that is majority catch-all-bucket is not useful for evaluating the
+  intents that actually matter operationally. Capped at 30/200 (15%).
+- Tradeoff: the golden set's intent distribution no longer matches the true production
+  distribution -- headline accuracy numbers are NOT representative of "accuracy on random
+  incoming traffic." Restated explicitly in REPORT.md.
+
+**6. TF-IDF retrieval, not a dense embedding + vector DB.**
+- Alternatives: sentence-transformers embeddings + FAISS/Chroma.
+- Why: at ~79k retrieval-pool documents, TF-IDF cosine similarity is fast (<50ms/query),
+  fully local (no embedding API cost/latency), and just as inspectable (term overlap is
+  literally why two messages matched, vs. an opaque embedding distance). The assignment
+  explicitly says "do not over-engineer vector infrastructure."
+- Tradeoff: TF-IDF misses semantic paraphrases with low lexical overlap (e.g. "my package
+  never showed up" vs "package not delivered" partially overlaps but a true paraphrase with
+  zero shared words would be missed). Documented as a known retrieval-quality ceiling.
+
+**7. Escalation policy is OR-logic over named risk signals, not a single confidence
+   threshold, and is deliberately biased toward escalating.**
+- Alternatives: `if confidence < 0.5: escalate` (explicitly rejected by the assignment).
+- Why: false auto-handling (confidently wrong, ships an unsupported promise) is worse than
+  an unnecessary escalation (costs a human a few minutes). Financial intents (refund/
+  billing) and account-security intents escalate unconditionally regardless of confidence.
+- Tradeoff, measured honestly: this produces a real unnecessary-escalation rate of 25.5% on
+  our reviewed subset (see REPORT.md) -- the policy is deliberately conservative and that
+  cost is visible in the numbers, not hidden.
+
+**8. Baseline B (TF-IDF+LogReg) is trained on rule-classifier "silver" labels, not
+   independent gold labels.**
+- Alternatives: skip Baseline B until real human labels exist; hand-label a large training
+  set first.
+- Why: training data volume needed (>15k examples) for a competent TF-IDF classifier makes
+  full hand-labeling infeasible in this timeframe; silver-label training is a standard,
+  named technique (weak supervision), not a shortcut we're hiding.
+- Tradeoff, stated plainly in `src/intent/baselines.py` and `REPORT.md`: Baseline B cannot
+  be expected to exceed the rules it was trained to imitate on non-golden data, and its
+  evaluated accuracy against golden labels is only informative to the extent the golden
+  labels are independent of the rules -- which is exactly why decision #9 below exists.
+
+**9. No LLM (Anthropic API) was called for classification/generation/judging in this
+   submission's reported numbers -- decision made explicit rather than silently degrading
+   scope.**
+- Context: no `ANTHROPIC_API_KEY` was present in the build sandbox (network egress to
+  `api.anthropic.com` is allow-listed, but no credential was provisioned).
+- Alternatives considered: (a) fabricate plausible-looking LLM outputs -- explicitly
+  forbidden and would be dishonest; (b) silently ship LLM-shaped code paths without
+  disclosing they were never run -- also dishonest; (c) what we did: build the LLM
+  intent/generation/judge code paths fully and correctly against the real Anthropic
+  Messages API, but report every number in `REPORT.md` as coming from the classical
+  (rule-based + TF-IDF) path, with the LLM path's status explicitly marked "implemented,
+  unmeasured." **This is the single most research-validity-relevant decision in this
+  project** and is restated in the "misleading headline number" section.
+- Tradeoff: the shipped system's classification/generation quality is bounded by what
+  regex rules and TF-IDF can do, not by an LLM's language understanding -- a real quality
+  ceiling, not a cosmetic one.
+
+**10. The 55-example "Claude-reviewed" label subset exists specifically to break
+    evaluation circularity, and is explicitly NOT called "hand-labeled."**
+- Why: the golden set's `gold_intent` was bootstrapped from the rule classifier's own
+  output. Evaluating the rule classifier against those labels would be tautological
+  (near-100% "accuracy" by construction). An independent read-through (by Claude, not
+  using the rule classifier's guess) of a 55-example stratified subset produces labels
+  that are non-circular with respect to the rule baseline, even though they are still not
+  independent human labels.
+- Tradeoff: 55 examples is a small evaluation set; per-class metrics on rare intents (3-5
+  examples per class) are noisy. All reported numbers use this subset and say so.
+
+**11. Generation is extractive/template-grounded by default, not free-text LLM
+    generation.**
+- Direct consequence of decision #9. The shipped `draft_extractive()` reuses the single
+  most similar historical resolution's *exact text* rather than paraphrasing it.
+- Tradeoff: replies can read as slightly mismatched to the current customer's specific
+  wording (see failure analysis in REPORT.md, e.g. GOLD examples where top-1 retrieval
+  match was topically adjacent but not precise) -- a real, measured cost of not having LLM
+  generation available, not glossed over.
+
+**12. Grounding check is a regex-based promise-detector, not an LLM-based fact-checker.**
+- Alternatives: LLM call to verify every draft against evidence (again, decision #9 blocks
+  this for the reported numbers).
+- Why: even a crude regex check ("we will refund/credit/replace... not present in
+  evidence") catches the most dangerous failure mode (inventing a concrete promised
+  action) without needing an API call, and is fully deterministic/testable.
+- Tradeoff: does not catch subtler unsupported claims (wrong facts stated confidently in
+  a way that doesn't match the promise-pattern regex). Documented as a real gap.
+
+**13. Golden-set sampling deliberately caps `OTHER_UNCLEAR` but does NOT drop it entirely.**
+- Alternatives: exclude OTHER_UNCLEAR from the golden set altogether.
+- Why: a real production system will receive off-topic/ambiguous traffic; a classifier and
+  escalation policy that has never been tested on it would have an untested failure mode
+  in exactly the place most likely to produce a nonsensical auto-reply.
+
+**14. Failure analysis top-5 modes were derived from the actual 21 action-disagreement
+    cases in the evaluation run, not assumed upfront.**
+- The assignment explicitly warns against assuming failure categories in advance; the five
+  categories in REPORT.md (see "Failure Analysis") were written after inspecting
+  `artifacts/eval_results/results.json`'s `action_disagreement_failures` list, not before.
+
+**15. What we deliberately did not build:** a UI/frontend, a production API server, a
+    vector database, multi-language support, multi-turn dialogue *management* (vs. just
+    reading prior-turn context), fine-tuning any model, and a fully-automated human-in-the-
+    loop labeling pipeline. Each is a reasonable next step (see REPORT.md "One More Week")
+    but none is what this assignment is graded on -- the assignment explicitly says "the
+    proof is worth more than the system," so time went into measurement validity over
+    surface polish.
