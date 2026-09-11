@@ -97,7 +97,7 @@ To run just the evaluation harness against already-processed data:
 python -m src.evaluation.run --config configs/eval.yaml
 ```
 
-To run the test suite (36 tests, no dataset required for most):
+To run the test suite (37 tests, no dataset required for most):
 ```bash
 python -m pytest tests/ -v
 ```
@@ -160,7 +160,7 @@ src/escalation/    policy.py
 src/evaluation/    run.py, judge_prompt.py, judge_agreement.py
 src/pipeline/      agent.py
 
-tests/             36 tests: leakage, escalation, preprocessing, taxonomy, aggregation, malformed input
+tests/             37 tests: leakage, escalation, preprocessing, taxonomy, aggregation, malformed input
 scripts/           01-06 numbered pipeline steps + run_pipeline.sh
 data/golden/       golden_set_reviewed.csv (committed), claude_review_labels.json
 data/README.md     dataset instructions

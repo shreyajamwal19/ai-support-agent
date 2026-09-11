@@ -207,16 +207,21 @@ an earlier draft of this report (which was based on n=55, before real bugs were 
    auditable one fix at a time — see `DECISIONS.md` #16's dev/held-out discipline).
 
 **5. Retrieval and generation are lexical, not semantic, so drafts for topically distant
-   but lexically similar messages can mismatch (structural limitation, not a bug).** Not
-   the dominant driver of the 87 action-disagreements above (those are almost entirely
-   intent/escalation-signal misses, not generation failures — the grounding check passes
-   100% of the time because it only catches a narrow failure pattern, §9 point 7), but
-   visible directly in pipeline smoke tests: a legal-threat-adjacent query's nearest
-   TF-IDF match was a topically unrelated message. *Likely cause*: TF-IDF captures
-   lexical, not semantic, similarity (`DECISIONS.md` #6). *Mitigation*: the escalation
-   policy already catches the specific legal-threat case regardless of draft content; a
-   semantic-similarity floor as a retrieval fallback remains a real next step.
-   *Implemented*: no.
+   but lexically similar messages can mismatch — and this can happen at *high* confidence,
+   not just low.** Reproduced directly (`src/pipeline/agent.py`): the query "Can I
+   purchase something and have someone else pick it up?" (a pre-purchase question) scores
+   0.721 relevance — well above both retrieval and escalation thresholds — against a
+   historical message "Arrangement of pick is not done yet" (a *return pickup* complaint),
+   purely because both share the word "pick." The system ships "Have you filled in the
+   form as requested earlier?" as an `auto_handle` reply — confidently wrong, not
+   uncertainly wrong, which is the more dangerous failure mode. *Likely cause*: TF-IDF
+   captures lexical, not semantic, similarity (`DECISIONS.md` #6); a naive "raise the
+   relevance threshold" fix would not have caught this specific case since 0.721 is
+   already a high score. *Mitigation*: a semantic (embedding) similarity check as a
+   secondary signal specifically to catch high-lexical/low-semantic mismatches, or a
+   second-pass "does the retrieved historical customer message actually restate the same
+   ask" check. *Implemented*: no — flagged as the top item under "One More Week" (§11)
+   given how directly it undermines the grounding claim this system is built around.
 
 ## 9. What Is Misleading About My Headline Number?
 
@@ -275,18 +280,21 @@ human-)reviewed evaluation subset. TF-IDF-only retrieval (lexical, not semantic)
 ## 11. One More Week
 
 Priority order, highest-value first:
-1. **Get real human labels** on the remaining 145 golden examples via
-   `scripts/06_review_golden_set.py`, and a second independent labeler on the existing 55
-   to measure label agreement (inter-annotator kappa) before trusting any number as final.
-2. **Provision an API key and run the LLM path** (`src/generation/llm_responder.py`,
+1. **Add a semantic-mismatch check for high-lexical/low-semantic retrieval matches**
+   (Failure Analysis #5) — the concrete reproduced example (0.721 "confident" TF-IDF
+   match that is semantically wrong) is the most directly damaging failure mode to this
+   system's core grounding claim, because it fails silently at high confidence rather
+   than triggering existing low-confidence safeguards.
+2. **Get real human labels** on all 200 golden examples via
+   `scripts/06_review_golden_set.py`, and a second independent labeler to measure
+   inter-annotator agreement, before treating any number in this report as final.
+3. **Provision an API key and run the LLM path** (`src/generation/llm_responder.py`,
    judge in `src/evaluation/judge_prompt.py`) — measure real judge-human agreement
    (`src/evaluation/judge_agreement.py`, currently unmeasured) on a 30-50 example subset,
    as the assignment requests.
-3. Add the two escalation-policy refinements identified in Failure Analysis #2/#3 (repeat-
-   contact signal; risk-scope financial/account signals below blanket intent-level firing)
-   and re-run evaluation on a held-out slice to check they generalize rather than overfit.
-4. Fix the profanity-vs-abuse false positive (Failure Analysis #4) with a brand-directed-
-   language check.
-5. Extend retrieval with a semantic (embedding) fallback when TF-IDF similarity is below a
-   floor, to address Failure Analysis #5, while keeping TF-IDF as the fast default.
+4. Add the escalation-policy refinement identified in Failure Analysis #4 (a
+   "conflicting information" repeat-contact-style signal) and re-run on a *fresh*
+   held-out split (the current dev/held-out split has now been looked at twice).
+5. Fix `COMPLAINT_SERVICE_QUALITY`'s low recall (Failure Analysis #2) with a lightweight
+   sentiment signal, since it's defined by tone more than keywords.
 6. Multi-language support for the ~25% of traffic currently dropped.
