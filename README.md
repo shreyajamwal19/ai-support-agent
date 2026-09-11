@@ -110,11 +110,16 @@ python -m pytest tests/ -v
 | Baseline B (TF-IDF+LogReg) | 60.0% | 53.6% |
 | System default (rule classifier) | 60.0% | 52.0% |
 
-| Escalation | Value |
+| Escalation (policy v1.1) | Value |
 |---|---|
-| Harmful auto-handle rate | 12.7% |
-| Unnecessary escalation rate | 25.5% |
-| Escalate recall | 70.8% |
+| Harmful auto-handle rate | 9.1% |
+| Unnecessary escalation rate | 30.9% |
+| Escalate recall | 79.2% |
+
+Policy v1.1 (`src/escalation/policy.py`) adds a repeat-contact signal and fixes a
+profanity-vs-abuse false positive after failure analysis — see `REPORT.md` §6.4 for the
+honest dev/held-out generalization check on this change (harmful-auto-handle rate
+improved on both; unnecessary-escalation rate got worse, more so on the untuned split).
 
 **Read `REPORT.md` §9 before citing these numbers anywhere** — they're computed on an
 AI-(not independently human-)reviewed 55-example subset, deliberately rebalanced away from

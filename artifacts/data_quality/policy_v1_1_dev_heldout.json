@@ -1,0 +1,14 @@
+{
+  "dev": {
+    "n": 42,
+    "action_accuracy": 0.619,
+    "harmful_auto_handle_rate": 0.095,
+    "unnecessary_escalation_rate": 0.286
+  },
+  "held_out": {
+    "n": 13,
+    "action_accuracy": 0.538,
+    "harmful_auto_handle_rate": 0.077,
+    "unnecessary_escalation_rate": 0.385
+  }
+}
