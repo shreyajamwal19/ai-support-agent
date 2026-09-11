@@ -1,15 +1,19 @@
 """Phase 12: LLM-as-judge rubric. Version-controlled prompt + structured output schema.
+Provider-agnostic (Gemini primary, OpenAI/Groq switchable) -- see src/llm/provider.py.
 
-STATUS: implemented but NOT EXECUTED for this submission. No ANTHROPIC_API_KEY was
-available in the build/eval sandbox (see DECISIONS.md #9). Judge-human agreement
-(Cohen's kappa / within-1 agreement) is therefore UNMEASURED, not merely "not reported" --
-we do not claim any agreement number. `src/evaluation/judge_agreement.py` implements the
-statistics and will compute them the moment (a) an API key is available to run the judge
-and (b) enough of `data/golden/golden_set_reviewed.csv` has real human ratings on the same
-rubric to compare against. Running both is a single command away -- see README "One More
-Week".
+STATUS: implemented but NOT EXECUTED for this submission. No provider API key was
+available in the build/eval sandbox, and none of Gemini/OpenAI/Groq's endpoints are
+reachable from it (see DECISIONS.md). Judge-human agreement (Cohen's kappa / within-1
+agreement) is therefore UNMEASURED, not merely "not reported" -- we do not claim any
+agreement number. `src/evaluation/judge_agreement.py` implements the statistics and will
+compute them the moment (a) a provider is available to run the judge and (b) enough of
+`data/golden/golden_set_reviewed.csv` has real human ratings on the same rubric to compare
+against.
 """
 import json
+import sys
+sys.path.insert(0, ".")
+from src.llm.provider import generate
 
 JUDGE_SYSTEM_PROMPT = """You are evaluating a draft customer-support reply for AmazonHelp
 on Twitter against a rubric. Score each dimension 1-5 (5=best). Be strict: a reply that
@@ -47,3 +51,14 @@ def build_judge_input(customer_text, draft_reply, evidence, action, escalation_r
         "retrieved_evidence": evidence, "system_action": action,
         "escalation_reason": escalation_reason,
     })
+
+
+def run_judge(customer_text, draft_reply, evidence, action, escalation_reason) -> dict:
+    """Calls the active LLM provider once, resolved from env vars, and returns the parsed
+    judge JSON PLUS provider_info. Never falls back to a different provider mid-call --
+    if the configured provider fails, this raises (src.llm.provider.LLMProviderError)."""
+    user_input = build_judge_input(customer_text, draft_reply, evidence, action, escalation_reason)
+    text, provider_info = generate(JUDGE_SYSTEM_PROMPT, user_input, max_tokens=500)
+    parsed = json.loads(text)
+    parsed["provider_info"] = provider_info
+    return parsed

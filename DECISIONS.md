@@ -87,19 +87,20 @@ tradeoff accepted. Ordered roughly by when they were made.
   evaluated accuracy against golden labels is only informative to the extent the golden
   labels are independent of the rules -- which is exactly why decision #9 below exists.
 
-**9. No LLM (Anthropic API) was called for classification/generation/judging in this
-   submission's reported numbers -- decision made explicit rather than silently degrading
-   scope.**
-- Context: no `ANTHROPIC_API_KEY` was present in the build sandbox (network egress to
-  `api.anthropic.com` is allow-listed, but no credential was provisioned).
+**9. No LLM call was executed for this submission's reported numbers -- decision made
+   explicit rather than silently degrading scope, and this held even after adding
+   multi-provider support.**
+- Context: no provider API key was present in the build sandbox originally, and although
+  Gemini/OpenAI/Groq keys were later provided (`DECISIONS.md` #15), none of those
+  providers' endpoints are reachable from this sandbox's network egress allowlist either.
 - Alternatives considered: (a) fabricate plausible-looking LLM outputs -- explicitly
   forbidden and would be dishonest; (b) silently ship LLM-shaped code paths without
   disclosing they were never run -- also dishonest; (c) what we did: build the LLM
-  intent/generation/judge code paths fully and correctly against the real Anthropic
-  Messages API, but report every number in `REPORT.md` as coming from the classical
-  (rule-based + TF-IDF) path, with the LLM path's status explicitly marked "implemented,
-  unmeasured." **This is the single most research-validity-relevant decision in this
-  project** and is restated in the "misleading headline number" section.
+  intent/generation/judge code paths fully and correctly against real provider SDKs
+  (`src/llm/provider.py`), but report every number in `REPORT.md` as coming from the
+  classical (rule-based + TF-IDF) path, with the LLM path's status explicitly marked
+  "implemented, unmeasured." **This is the single most research-validity-relevant
+  decision in this project** and is restated in the "misleading headline number" section.
 - Tradeoff: the shipped system's classification/generation quality is bounded by what
   regex rules and TF-IDF can do, not by an LLM's language understanding -- a real quality
   ceiling, not a cosmetic one.
@@ -173,7 +174,26 @@ tradeoff accepted. Ordered roughly by when they were made.
   to model the practice of writing down *when a metric caught a real bug* as its own
   decision-log-worthy event, not just final design choices.
 
-**15. What we deliberately did not build:** a UI/frontend, a production API server, a
+**15. LLM provider is Gemini by default, switchable to OpenAI/Groq via one env var, with
+    no automatic cross-provider fallback.**
+- Alternatives: hardcode a single provider (simpler, but no recovery path if a quota/rate
+  limit hits mid-project); build a routing/retry layer that automatically falls back
+  across providers (more "resilient" looking, but risks silently mixing providers within
+  one benchmark, which would invalidate any judge-agreement or generation-quality
+  comparison without anyone noticing).
+- Why: `src/llm/provider.py` resolves `LLM_PROVIDER` (default `gemini`) once per call,
+  requires that provider's own API key, and raises `LLMProviderError` — never retries
+  against a different provider — if the key is missing or the call fails. Every
+  evaluation run stamps `metadata.llm_provider = {provider, model, api_key_present}`
+  (`src/evaluation/run.py`) so it's always inspectable after the fact which provider was
+  configured, even for runs where the classical (non-LLM) path is what actually produced
+  the numbers.
+- Tradeoff: switching providers mid-project is a manual, explicit action (edit
+  `LLM_PROVIDER` in `.env`), not automatic — by design. Fallback providers are for
+  development/recovery only; using one for an entire benchmark is a deliberate choice you
+  make, not something the system decides for you.
+
+**16. What we deliberately did not build:** a UI/frontend, a production API server, a
     vector database, multi-language support, multi-turn dialogue *management* (vs. just
     reading prior-turn context), fine-tuning any model, and a fully-automated human-in-the-
     loop labeling pipeline. Each is a reasonable next step (see REPORT.md "One More Week")

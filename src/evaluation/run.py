@@ -24,6 +24,7 @@ from src.intent.baselines import MajorityClassBaseline, TfidfLogRegBaseline
 from src.retrieval.tfidf_retriever import TfidfRetriever
 from src.escalation.policy import decide as escalation_decide
 from src.generation.responder import draft_extractive
+from src.llm.provider import get_active_provider_info
 
 
 def get_git_commit():
@@ -152,11 +153,15 @@ def main(config_path):
             "git_commit": get_git_commit(),
             "config": cfg,
             "n_golden_examples_used": len(golden),
-            "caveat": ("Metrics below are computed against the 55-example Claude-reviewed "
-                       "subset (labeling_status=claude_reviewed_not_independent_human), NOT "
-                       "independently human-verified labels. Treat as directional, not "
+            "llm_provider": get_active_provider_info(),
+            "caveat": (f"Metrics below are computed against {len(golden)} examples with "
+                       "labeling_status in {human_reviewed, claude_reviewed_not_independent_human}. "
+                       "Unless labeling_status is 'human_reviewed' for all of them, these are "
+                       "NOT independently human-verified labels -- treat as directional, not "
                        "final validated numbers. See REPORT.md 'What is misleading about my "
-                       "headline number'."),
+                       "headline number'. llm_provider above reflects the LLM_PROVIDER "
+                       "configured for this run even though the classical (rule/TF-IDF) path "
+                       "is what actually produced the numbers below -- see DECISIONS.md."),
         },
         "intent_classification": intent_results,
         "escalation": escalation_results,

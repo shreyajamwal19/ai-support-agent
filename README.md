@@ -44,9 +44,13 @@ customer message
   local, inspectable.
 - **Escalation is 7 named risk signals (OR-logic), not `if confidence < X`** — biased
   toward escalating because false auto-handling is worse than an unnecessary escalation.
-- **No LLM calls in the reported numbers** — no API key in the build sandbox. Every
-  classification/generation/grounding number below comes from regex rules + TF-IDF. This
-  is the single most important scope caveat in this repository.
+- **No LLM calls in the reported numbers** — no reachable provider in the build sandbox.
+  Every classification/generation/grounding number below comes from regex rules + TF-IDF.
+  This is the single most important scope caveat in this repository.
+- **LLM provider is Gemini by default**, switchable to OpenAI or Groq via one env var
+  (`LLM_PROVIDER`) for development/recovery — never auto-switched mid-benchmark; every
+  eval run records exactly which provider/model was configured. See `.env.example` and
+  `DECISIONS.md` #15.
 
 ## 4. Setup
 
