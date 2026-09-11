@@ -36,7 +36,12 @@ def get_git_commit():
 def load_golden(cfg):
     df = pd.read_csv(cfg["golden_set"])
     if cfg.get("only_reviewed_subset", True):
-        df = df[df["labeling_status"] == "claude_reviewed_not_independent_human"].copy()
+        # Accept either: real human labels (preferred) or the earlier Claude-reviewed
+        # bootstrap labels, whichever are present. Once scripts/08_finalize_human_labels.py
+        # has run, every row is "human_reviewed" and this naturally uses only those.
+        df = df[df["labeling_status"].isin(
+            ["human_reviewed", "claude_reviewed_not_independent_human"]
+        )].copy()
     return df.reset_index(drop=True)
 
 
