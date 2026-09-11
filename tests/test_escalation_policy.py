@@ -35,3 +35,15 @@ def test_account_security_escalates():
 def test_low_confidence_escalates():
     d = decide("OTHER_UNCLEAR", 0.2, [{"relevance": 0.5}], "hmm")
     assert "low_intent_confidence" in d.triggered_signals
+
+
+def test_repeat_contact_signal_v1_1():
+    d = decide("ORDER_STATUS", 0.9, [{"relevance": 0.8}],
+               "this is the third time I've contacted you about this, still not fixed")
+    assert "repeat_contact_prior_attempt_failed" in d.triggered_signals
+    assert d.action == "escalate"
+
+
+def test_no_repeat_contact_signal_on_first_contact():
+    d = decide("ORDER_STATUS", 0.9, [{"relevance": 0.8}], "where is my order")
+    assert "repeat_contact_prior_attempt_failed" not in d.triggered_signals

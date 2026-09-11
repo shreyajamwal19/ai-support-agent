@@ -79,16 +79,39 @@ customer message
 | Baseline B (TF-IDF + LogReg, trained on rule-derived silver labels) | 0.600 | 0.536 | 0.615 |
 | System default (rule classifier) | 0.600 | 0.520 | 0.605 |
 
-### 6.2 Escalation (n=55)
+### 6.2 Escalation (n=55, policy v1.1 -- see §6.4)
 
 | Metric | Value |
 |---|---|
-| Escalate precision | 0.548 |
-| Escalate recall | 0.708 |
-| Auto-handle precision | 0.708 |
-| Auto-handle recall | 0.548 |
-| **Harmful auto-handle rate** (gold=escalate, system=auto_handle) | **12.7%** (7/55) |
-| Unnecessary escalation rate (gold=auto_handle, system=escalate) | 25.5% (14/55) |
+| Escalate precision | 0.528 |
+| Escalate recall | 0.792 |
+| Auto-handle precision | 0.737 |
+| Auto-handle recall | 0.452 |
+| **Harmful auto-handle rate** (gold=escalate, system=auto_handle) | **9.1%** (5/55) |
+| Unnecessary escalation rate (gold=auto_handle, system=escalate) | 30.9% (17/55) |
+
+### 6.4 Policy v1.1 refinement (dev/held-out check)
+
+After the first evaluation pass (§8 below), two fixes were made and re-evaluated: (a) a
+`repeat_contact_prior_attempt_failed` escalation signal (Failure #3), and (b) requiring
+profanity to be brand-directed before firing the abuse intent (Failure #4). Tuned **only**
+on the `dev` half (42/55) of the reviewed subset; `held_out` (13/55) was not looked at
+while making the change, to check generalization honestly (`scripts/07_policy_refinement_eval.py`,
+`artifacts/eval_results/policy_v1_1_dev_heldout.json`):
+
+| Split | n | Action accuracy | Harmful auto-handle rate | Unnecessary escalation rate |
+|---|---|---|---|---|
+| dev (tuned on this) | 42 | 61.9% | 9.5% | 28.6% |
+| held_out (not tuned on this) | 13 | 53.8% | 7.7% | 38.5% |
+
+**Honest read**: harmful-auto-handle rate improved on both splits (the safety-relevant
+metric we most care about), including the held-out split it wasn't tuned on — real
+evidence the repeat-contact fix generalizes, not just overfits. But held-out action
+accuracy (53.8%) is lower than dev (61.9%), and unnecessary-escalation rate is *worse* on
+held-out (38.5% vs. the pre-fix 25.5% baseline) — the fix trades some unnecessary
+escalation for less harmful auto-handling, and that tradeoff is more pronounced on
+examples it wasn't tuned on. With n=13 on held-out, none of this is statistically
+conclusive; it's directional evidence, reported as such.
 
 ### 6.3 Retrieval / Grounding (n=55)
 
@@ -145,7 +168,10 @@ reviewed subset), not assumed in advance.
    fine. *Likely cause*: the policy has no signal for "customer states a prior resolution
    attempt already failed" — a strong real-world escalation trigger. *Mitigation*: add a
    regex/keyword signal for repeat-contact language ("again", "already tried", "third
-   time", "still not"). *Implemented*: no.
+   time", "still not"). *Implemented*: **yes, as policy v1.1** (§6.4) — improved
+   harmful-auto-handle rate on both the tuned (`dev`, 12.7%→9.5%) and untuned
+   (`held_out`, →7.7%) splits, at the cost of a higher unnecessary-escalation rate,
+   particularly on `held_out` (→38.5%).
 
 **4. Profanity used as an intensifier gets misclassified as
    `ABUSE_THREAT_ESCALATION_DEMAND` instead of the actual topic intent.** (2/21 cases:
@@ -154,7 +180,10 @@ reviewed subset), not assumed in advance.
    classifier's abuse pattern includes bare profanity regardless of whether it's directed
    at the brand/staff vs. venting about a product. *Mitigation*: require profanity to be
    near brand-directed language ("you", "your service") to fire the abuse rule, or make
-   it an additive risk signal rather than an intent override. *Implemented*: no.
+   it an additive risk signal rather than an intent override. *Implemented*: **yes, as
+   policy v1.1** (§6.4) — the abuse rule now requires profanity/hostility to appear near
+   brand-directed language (or an explicit legal/manager-escalation phrase) rather than
+   firing on bare profanity alone.
 
 **5. Extractive generation occasionally retrieves a topically-adjacent but contextually
    wrong historical resolution when the top-1 similarity score is low (~0.4-0.5).** Not

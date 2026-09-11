@@ -17,6 +17,27 @@ LEGAL_PATTERN = re.compile(
 IRREVERSIBLE_PATTERN = re.compile(
     r"\b(cancel my (account|order)|delete my account|close my account)\b", re.I)
 
+# --- v1.1 policy refinements, added after failure analysis on the `dev` half of the
+# 55-example reviewed subset (see REPORT.md Failure Analysis #2/#3 and DECISIONS.md #16).
+# Tuned ONLY on `dev` (42 examples); `held_out` (13 examples) is used purely to check
+# these generalize rather than overfit -- see scripts/07_policy_refinement_eval.py.
+
+# Failure #3: customer explicitly states a prior resolution attempt already failed --
+# strong real-world escalation signal missed by the original 7 signals.
+REPEAT_CONTACT_PATTERN = re.compile(
+    r"\b(again|already tried|still (not|isn.?t|hasn.?t|doesn.?t)|"
+    r"(second|third|\d+(st|nd|rd|th)) time|multiple times|\d+ times|"
+    r"i.?ve (already|tried)|keep(s)? (happening|telling))\b", re.I)
+
+# Failure #4: bare profanity used as an intensifier (venting about a product) should not
+# by itself classify a message as ABUSE_THREAT_ESCALATION_DEMAND / trigger escalation --
+# only fire the abuse signal when hostility is directed at the brand/staff/service itself.
+BRAND_DIRECTED_HOSTILITY_PATTERN = re.compile(
+    r"\b(you|your|yall|y'all|ya'll|customer service|support|rep(s)?|agent(s)?)\b.{0,40}"
+    r"\b(fuck|shit|useless|worthless|pathetic|incompetent|idiot|garbage)\b"
+    r"|\b(fuck|shit|useless|worthless|pathetic|incompetent|idiot|garbage)\b.{0,40}"
+    r"\b(you|your|customer service|support|rep(s)?|agent(s)?)\b", re.I)
+
 
 @dataclass
 class EscalationDecision:
@@ -61,6 +82,11 @@ def decide(intent: str, intent_confidence: float, retrieved_evidence: list,
     # 7. Irreversible action requested
     if IRREVERSIBLE_PATTERN.search(customer_text or ""):
         signals.append(("irreversible_action_requested", "customer explicitly requests an irreversible account/order action"))
+
+    # 8. (v1.1) Repeat contact -- customer states a prior resolution attempt already
+    # failed. Added after Failure Analysis #3 (dev-half tuning only, see REPORT.md).
+    if REPEAT_CONTACT_PATTERN.search(customer_text or ""):
+        signals.append(("repeat_contact_prior_attempt_failed", "customer indicates a prior resolution attempt already failed"))
 
     if signals:
         primary = signals[0]

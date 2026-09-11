@@ -139,6 +139,22 @@ tradeoff accepted. Ordered roughly by when they were made.
   categories in REPORT.md (see "Failure Analysis") were written after inspecting
   `artifacts/eval_results/results.json`'s `action_disagreement_failures` list, not before.
 
+**16. Policy v1.1 fixes were tuned on a `dev` half of the reviewed subset and checked (not
+    tuned) against a `held_out` half, rather than tuned against all 55 examples at once.**
+- Alternatives: tune directly against all 55 reviewed examples (simpler, but exactly the
+  overfitting risk flagged in `DECISIONS.md`'s earlier draft of this list, decision-log
+  entry now folded in above as #8's sibling concern).
+- Why: Failure Analysis #3/#4 fixes (repeat-contact escalation signal, brand-directed-
+  profanity requirement for the abuse rule) needed *some* check that they generalize
+  rather than just resolve the specific 21 cases that motivated them.
+- Result, reported honestly in `REPORT.md` §6.4: harmful-auto-handle rate improved on
+  both `dev` (12.7%→9.5%) and the untuned `held_out` split (→7.7%) — real evidence of
+  generalization on the metric that matters most. Unnecessary-escalation rate worsened,
+  more so on `held_out` (30.9% dev / 38.5% held_out vs. 25.5% pre-fix baseline) — a
+  genuine, disclosed tradeoff, not hidden by only reporting the metric that improved.
+- Tradeoff: n=13 on `held_out` is too small to be statistically conclusive either way;
+  this is a directional sanity check, not a rigorous generalization proof.
+
 **15. What we deliberately did not build:** a UI/frontend, a production API server, a
     vector database, multi-language support, multi-turn dialogue *management* (vs. just
     reading prior-turn context), fine-tuning any model, and a fully-automated human-in-the-

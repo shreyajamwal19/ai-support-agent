@@ -28,3 +28,20 @@ def test_all_taxonomy_ids_are_reachable_in_rules():
 
 def test_malformed_unicode_does_not_crash():
     classify("\ud83d\ude00 test emoji garbage \x00\x01")
+
+
+def test_v1_1_bare_profanity_not_directed_at_brand_is_not_abuse():
+    """Failure Analysis #4 fix: 'the piece of shit doesn't work' is a product complaint,
+    not brand-directed abuse -- should classify by topic (delivery/quality), not abuse."""
+    r = classify("the piece of shit doesnt even work")
+    assert r["intent"] != "ABUSE_THREAT_ESCALATION_DEMAND"
+
+
+def test_v1_1_brand_directed_profanity_is_still_abuse():
+    r = classify("your customer service is fucking useless")
+    assert r["intent"] == "ABUSE_THREAT_ESCALATION_DEMAND"
+
+
+def test_v1_1_legal_threat_still_detected_regardless_of_proximity():
+    r = classify("I am going to sue you, this is fraud")
+    assert r["intent"] == "ABUSE_THREAT_ESCALATION_DEMAND"

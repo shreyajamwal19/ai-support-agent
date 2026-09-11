@@ -15,10 +15,31 @@ INTENT_IDS = [i["id"] for i in TAXONOMY["intents"]]
 
 # Ordered rules: first match wins. Order encodes priority (e.g. abuse/escalation checked
 # before generic complaint; refund checked before generic order status).
+# v1.1: bare profanity used as an intensifier ("the piece of shit doesn't work") should
+# not alone trigger ABUSE_THREAT_ESCALATION_DEMAND -- require it to be brand/staff-
+# directed, OR a legal/explicit-escalation-demand phrase (which needs no proximity check).
+# Fixes Failure Analysis #4, tuned on the `dev` half of the reviewed subset only.
+_ABUSE_LEGAL_OR_DEMAND = re.compile(
+    r"\b(lawyer|sue|lawsuit|fraud|bbb|attorney general|speak to (a )?manager|corporate|"
+    r"escalat\w*|legal action)\b", re.I)
+_ABUSE_BRAND_DIRECTED_PROFANITY = re.compile(
+    r"\b(you|your|yall|y'all|customer service|support|rep(s)?|agent(s)?)\b.{0,40}"
+    r"\b(fuck|shit|useless|worthless|pathetic|incompetent|idiot|garbage)\b"
+    r"|\b(fuck|shit|useless|worthless|pathetic|incompetent|idiot|garbage)\b.{0,40}"
+    r"\b(you|your|customer service|support|rep(s)?|agent(s)?)\b", re.I)
+
+
+class _AbuseRule:
+    """Fires if EITHER a legal/explicit-escalation phrase is present, OR profanity/
+    hostility appears near brand-directed language -- not on bare profanity alone."""
+    pattern = "ABUSE_THREAT_ESCALATION_DEMAND (v1.1: legal/demand OR brand-directed hostility)"
+
+    def search(self, text):
+        return _ABUSE_LEGAL_OR_DEMAND.search(text) or _ABUSE_BRAND_DIRECTED_PROFANITY.search(text)
+
+
 RULES = [
-    ("ABUSE_THREAT_ESCALATION_DEMAND", re.compile(
-        r"\b(lawyer|sue|lawsuit|fraud|bbb|attorney general|fuck|shit|useless|worthless|"
-        r"speak to (a )?manager|corporate|escalat\w*|legal action)\b", re.I)),
+    ("ABUSE_THREAT_ESCALATION_DEMAND", _AbuseRule()),
     ("REFUND_RETURN", re.compile(
         r"\b(refund|return|replace(ment)?|money back|reimburse|compensat\w*)\b", re.I)),
     ("DELIVERY_QUALITY_ISSUE", re.compile(
@@ -52,7 +73,8 @@ def classify(text: str) -> dict:
         return {"intent": "OTHER_UNCLEAR", "confidence": 0.5, "matched_rule": None}
     for intent_id, pattern in RULES:
         if pattern.search(text):
-            return {"intent": intent_id, "confidence": 0.75, "matched_rule": pattern.pattern[:40]}
+            desc = pattern.pattern if hasattr(pattern, "pattern") else str(pattern)
+            return {"intent": intent_id, "confidence": 0.75, "matched_rule": desc[:60]}
     return {"intent": "OTHER_UNCLEAR", "confidence": 0.4, "matched_rule": None}
 
 
