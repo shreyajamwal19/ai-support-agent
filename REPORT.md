@@ -204,7 +204,7 @@ an earlier draft of this report (which was based on n=55, before real bugs were 
    low-confidence signal when no other risk signal fires — treat it as a "no action
    needed" case instead of blanket-escalating. *Implemented*: no (a real, cheap next fix,
    deliberately not squeezed in this round to keep the v1.1/v1.2/bugfix change history
-   auditable one fix at a time — see `DECISIONS.md` #16's dev/held-out discipline).
+   auditable one fix at a time — see `DECISIONS.md` #13's dev/held-out discipline).
 
 **5. Retrieval and generation are lexical, not semantic, so drafts for topically distant
    but lexically similar messages can mismatch — and this can happen at *high* confidence,

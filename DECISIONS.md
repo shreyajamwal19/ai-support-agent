@@ -117,32 +117,27 @@ tradeoff accepted. Ordered roughly by when they were made.
   `ABUSE_THREAT_ESCALATION_DEMAND`) are noisy. All reported numbers use these labels and
   say so explicitly (`REPORT.md` §9 point 1).
 
-**11. Generation is extractive/template-grounded by default, not free-text LLM
-    generation.**
-- Direct consequence of decision #9. The shipped `draft_extractive()` reuses the single
-  most similar historical resolution's *exact text* rather than paraphrasing it.
-- Tradeoff: replies can read as slightly mismatched to the current customer's specific
-  wording (see failure analysis in REPORT.md, e.g. GOLD examples where top-1 retrieval
-  match was topically adjacent but not precise) -- a real, measured cost of not having LLM
-  generation available, not glossed over.
+**11. Generation is extractive/template-grounded by default (not free-text LLM
+    generation), and its grounding check is a regex promise-detector (not an LLM
+    fact-checker) -- both direct consequences of decision #9.**
+- The shipped `draft_extractive()` reuses the single most similar historical resolution's
+  *exact text* rather than paraphrasing it; the grounding check ("we will refund/credit/
+  replace... not present in evidence") catches the single most dangerous failure mode
+  (inventing a concrete promised action) without needing an API call, deterministically.
+- Tradeoff: replies can read as mismatched to the current customer's specific wording
+  (Failure Analysis #5 in REPORT.md, reproduced concretely and locked in with a
+  regression test); the regex grounding check also does not catch subtler unsupported
+  claims or topical mismatches that don't match its promise-pattern -- a real, disclosed
+  gap, not glossed over.
 
-**12. Grounding check is a regex-based promise-detector, not an LLM-based fact-checker.**
-- Alternatives: LLM call to verify every draft against evidence (again, decision #9 blocks
-  this for the reported numbers).
-- Why: even a crude regex check ("we will refund/credit/replace... not present in
-  evidence") catches the most dangerous failure mode (inventing a concrete promised
-  action) without needing an API call, and is fully deterministic/testable.
-- Tradeoff: does not catch subtler unsupported claims (wrong facts stated confidently in
-  a way that doesn't match the promise-pattern regex). Documented as a real gap.
-
-**13. Failure analysis top-5 modes were derived from the actual evaluation output at each
+**12. Failure analysis top-5 modes were derived from the actual evaluation output at each
     stage (21 cases at n=55, then re-derived from 87 cases at n=200 after real bugs were
     found and fixed), not assumed upfront or left stale after the golden set grew.**
 - The assignment explicitly warns against assuming failure categories in advance; the
   final five categories in `REPORT.md` §8 were rewritten after the n=200 + bugfix round
-  (`DECISIONS.md` #17), not left as the earlier n=55 draft.
+  (`DECISIONS.md` #14), not left as the earlier n=55 draft.
 
-**14. Policy v1.1 fixes were tuned on a `dev` half of the reviewed subset and checked (not
+**13. Policy v1.1 fixes were tuned on a `dev` half of the reviewed subset and checked (not
     tuned) against a `held_out` half, rather than tuned against all 55 examples at once.**
 - Alternatives: tune directly against all 55 reviewed examples (simpler, but exactly the
   overfitting risk flagged in `DECISIONS.md`'s earlier draft of this list, decision-log
@@ -158,7 +153,7 @@ tradeoff accepted. Ordered roughly by when they were made.
 - Tradeoff: n=13 on `held_out` is too small to be statistically conclusive either way;
   this is a directional sanity check, not a rigorous generalization proof.
 
-**15. A real pipeline bug (raw text fed to classification/retrieval instead of cleaned
+**14. A real pipeline bug (raw text fed to classification/retrieval instead of cleaned
     text) was found and fixed by expanding the golden set to n=200, not by code review
     alone.**
 - What happened: `src/pipeline/agent.py` and `src/evaluation/run.py` were passing
@@ -178,7 +173,7 @@ tradeoff accepted. Ordered roughly by when they were made.
   to model the practice of writing down *when a metric caught a real bug* as its own
   decision-log-worthy event, not just final design choices.
 
-**16. What we deliberately did not build:** a UI/frontend, a production API server, a
+**15. What we deliberately did not build:** a UI/frontend, a production API server, a
     vector database, multi-language support, multi-turn dialogue *management* (vs. just
     reading prior-turn context), fine-tuning any model, and a fully-automated human-in-the-
     loop labeling pipeline. Each is a reasonable next step (see REPORT.md "One More Week")

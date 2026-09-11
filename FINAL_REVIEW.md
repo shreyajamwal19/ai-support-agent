@@ -153,7 +153,7 @@ testbed for the assignment's core claim (grounded-in-historical-resolution).
     March 3rd") without matching the promise-verb regex pattern would pass the check
     even though it's fabricated — the check only catches the
     promise-verb + absent-from-evidence pattern, not arbitrary factual hallucination.
-    Documented in `DECISIONS.md` #12.
+    Documented in `DECISIONS.md` #11.
 
 ## Selection assessment
 

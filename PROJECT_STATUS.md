@@ -29,7 +29,7 @@
 - [x] Decision log (15 decisions) — `DECISIONS.md`
 - [x] Test suite: 36 tests, all passing — `tests/`
 - [x] Escalation policy v1.1/v1.2 + a real pipeline text-normalization bug found and
-      fixed while expanding the golden set to n=200 — `DECISIONS.md` #14/#15
+      fixed while expanding the golden set to n=200 — `DECISIONS.md` #13/#14
 - [x] README with <15-min reproduction path (measured ~8-9 min) — `README.md`
 - [x] Final red-team review — `FINAL_REVIEW.md`
 
