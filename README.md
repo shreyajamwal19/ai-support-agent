@@ -97,33 +97,34 @@ To run just the evaluation harness against already-processed data:
 python -m src.evaluation.run --config configs/eval.yaml
 ```
 
-To run the test suite (31 tests, no dataset required for most):
+To run the test suite (36 tests, no dataset required for most):
 ```bash
 python -m pytest tests/ -v
 ```
 
-## 7. Headline results (from `artifacts/eval_results/results.json`, n=55 reviewed subset)
+## 7. Headline results (from `artifacts/eval_results/results.json`, n=200, full golden set)
 
 | | Accuracy | Macro-F1 |
 |---|---|---|
-| Baseline A (majority class) | 5.5% | 0.9% |
-| Baseline B (TF-IDF+LogReg) | 60.0% | 53.6% |
-| System default (rule classifier) | 60.0% | 52.0% |
+| Baseline A (majority class) | 6.5% | 1.0% |
+| Baseline B (TF-IDF+LogReg) | 37.0% | 42.8% |
+| System default (rule classifier, v1.2) | 38.0% | 45.1% |
 
 | Escalation (policy v1.1) | Value |
 |---|---|
-| Harmful auto-handle rate | 9.1% |
-| Unnecessary escalation rate | 30.9% |
-| Escalate recall | 79.2% |
+| Harmful auto-handle rate | 13.5% |
+| Unnecessary escalation rate | 30.0% |
+| Escalate recall | 72.4% |
 
 Policy v1.1 (`src/escalation/policy.py`) adds a repeat-contact signal and fixes a
-profanity-vs-abuse false positive after failure analysis — see `REPORT.md` §6.4 for the
-honest dev/held-out generalization check on this change (harmful-auto-handle rate
-improved on both; unnecessary-escalation rate got worse, more so on the untuned split).
+profanity-vs-abuse false positive after failure analysis. The n=55→200 golden-set
+expansion also surfaced and fixed a real pipeline bug (classification/retrieval were
+running on raw, un-normalized tweet text) — see `REPORT.md` §6.4 for the full version-by-
+version numbers and §6.5 for a dev/held-out generalization check on policy v1.1.
 
-**Read `REPORT.md` §9 before citing these numbers anywhere** — they're computed on an
-AI-(not independently human-)reviewed 55-example subset, deliberately rebalanced away from
-production intent distribution, with no LLM in the loop. They are directional evidence of
+**Read `REPORT.md` §9 before citing these numbers anywhere** — they're computed on the
+full 200-example golden set, all AI-(not independently human-)reviewed, deliberately
+rebalanced away from production intent distribution, with no LLM in the loop. They are directional evidence of
 a working, measurable system, not a validated production benchmark.
 
 ## 8. Example agent output
@@ -159,7 +160,7 @@ src/escalation/    policy.py
 src/evaluation/    run.py, judge_prompt.py, judge_agreement.py
 src/pipeline/      agent.py
 
-tests/             31 tests: leakage, escalation, preprocessing, taxonomy, aggregation, malformed input
+tests/             36 tests: leakage, escalation, preprocessing, taxonomy, aggregation, malformed input
 scripts/           01-06 numbered pipeline steps + run_pipeline.sh
 data/golden/       golden_set_reviewed.csv (committed), claude_review_labels.json
 data/README.md     dataset instructions
@@ -169,8 +170,7 @@ artifacts/         data_quality/ (committed, small), eval_results/ + models/ + i
 ## 10. Known limitations
 
 English-only (~75% of traffic). Single-label taxonomy. No LLM in reported numbers (code
-path exists, unexecuted). 55-example AI-reviewed (not independent human) evaluation
-subset. TF-IDF retrieval is lexical, not semantic. 2017-2018 data — AmazonHelp's actual
+path exists, unexecuted). 200-example AI-reviewed (not independent human) golden evaluation set. TF-IDF retrieval is lexical, not semantic. 2017-2018 data — AmazonHelp's actual
 workflows have changed since. Full unhedged discussion: `REPORT.md` §9-10.
 
 ## 11. Reproducibility notes

@@ -40,14 +40,20 @@ tradeoff accepted. Ordered roughly by when they were made.
 - Tradeoff: the system is not usable as-is for non-English AmazonHelp traffic; flagged in
   REPORT.md as a real production gap, not silently dropped.
 
-**5. OTHER_UNCLEAR capped in golden-set sampling instead of sampled proportionally.**
+**5. `OTHER_UNCLEAR` capped in golden-set sampling instead of sampled proportionally, but
+   never dropped entirely.**
 - Alternatives: pure proportional stratified sampling (would put ~130/238 slots into
-  OTHER_UNCLEAR, since it's 66% of the raw pool).
+  `OTHER_UNCLEAR`, since it's 66% of the raw pool); or excluding it from the golden set
+  altogether.
 - Why: a golden set that is majority catch-all-bucket is not useful for evaluating the
-  intents that actually matter operationally. Capped at 30/200 (15%).
+  intents that actually matter operationally — capped at 30/200 (15%) in the base
+  stratified sample. But it's kept, not dropped, because a real production system will
+  receive off-topic/ambiguous traffic and a classifier/escalation-policy untested on it
+  would have an untested failure mode in exactly the place most likely to produce a
+  nonsensical auto-reply.
 - Tradeoff: the golden set's intent distribution no longer matches the true production
-  distribution -- headline accuracy numbers are NOT representative of "accuracy on random
-  incoming traffic." Restated explicitly in REPORT.md.
+  distribution — headline accuracy numbers are NOT representative of "accuracy on random
+  incoming traffic." Restated explicitly in `REPORT.md`.
 
 **6. TF-IDF retrieval, not a dense embedding + vector DB.**
 - Alternatives: sentence-transformers embeddings + FAISS/Chroma.
@@ -98,16 +104,18 @@ tradeoff accepted. Ordered roughly by when they were made.
   regex rules and TF-IDF can do, not by an LLM's language understanding -- a real quality
   ceiling, not a cosmetic one.
 
-**10. The 55-example "Claude-reviewed" label subset exists specifically to break
-    evaluation circularity, and is explicitly NOT called "hand-labeled."**
+**10. All 200 golden-set examples are "Claude-reviewed" labels (not rule-derived, and
+    not human-labeled), specifically to break evaluation circularity while maximizing
+    statistical power -- and are explicitly NOT called "hand-labeled."**
 - Why: the golden set's `gold_intent` was bootstrapped from the rule classifier's own
   output. Evaluating the rule classifier against those labels would be tautological
   (near-100% "accuracy" by construction). An independent read-through (by Claude, not
   using the rule classifier's guess) of a 55-example stratified subset produces labels
   that are non-circular with respect to the rule baseline, even though they are still not
   independent human labels.
-- Tradeoff: 55 examples is a small evaluation set; per-class metrics on rare intents (3-5
-  examples per class) are noisy. All reported numbers use this subset and say so.
+- Tradeoff: even at n=200, per-class metrics on rare intents (e.g. n=3 for
+  `ABUSE_THREAT_ESCALATION_DEMAND`) are noisy. All reported numbers use these labels and
+  say so explicitly (`REPORT.md` §9 point 1).
 
 **11. Generation is extractive/template-grounded by default, not free-text LLM
     generation.**
@@ -127,19 +135,14 @@ tradeoff accepted. Ordered roughly by when they were made.
 - Tradeoff: does not catch subtler unsupported claims (wrong facts stated confidently in
   a way that doesn't match the promise-pattern regex). Documented as a real gap.
 
-**13. Golden-set sampling deliberately caps `OTHER_UNCLEAR` but does NOT drop it entirely.**
-- Alternatives: exclude OTHER_UNCLEAR from the golden set altogether.
-- Why: a real production system will receive off-topic/ambiguous traffic; a classifier and
-  escalation policy that has never been tested on it would have an untested failure mode
-  in exactly the place most likely to produce a nonsensical auto-reply.
+**13. Failure analysis top-5 modes were derived from the actual evaluation output at each
+    stage (21 cases at n=55, then re-derived from 87 cases at n=200 after real bugs were
+    found and fixed), not assumed upfront or left stale after the golden set grew.**
+- The assignment explicitly warns against assuming failure categories in advance; the
+  final five categories in `REPORT.md` §8 were rewritten after the n=200 + bugfix round
+  (`DECISIONS.md` #17), not left as the earlier n=55 draft.
 
-**14. Failure analysis top-5 modes were derived from the actual 21 action-disagreement
-    cases in the evaluation run, not assumed upfront.**
-- The assignment explicitly warns against assuming failure categories in advance; the five
-  categories in REPORT.md (see "Failure Analysis") were written after inspecting
-  `artifacts/eval_results/results.json`'s `action_disagreement_failures` list, not before.
-
-**16. Policy v1.1 fixes were tuned on a `dev` half of the reviewed subset and checked (not
+**14. Policy v1.1 fixes were tuned on a `dev` half of the reviewed subset and checked (not
     tuned) against a `held_out` half, rather than tuned against all 55 examples at once.**
 - Alternatives: tune directly against all 55 reviewed examples (simpler, but exactly the
   overfitting risk flagged in `DECISIONS.md`'s earlier draft of this list, decision-log
@@ -155,7 +158,27 @@ tradeoff accepted. Ordered roughly by when they were made.
 - Tradeoff: n=13 on `held_out` is too small to be statistically conclusive either way;
   this is a directional sanity check, not a rigorous generalization proof.
 
-**15. What we deliberately did not build:** a UI/frontend, a production API server, a
+**15. A real pipeline bug (raw text fed to classification/retrieval instead of cleaned
+    text) was found and fixed by expanding the golden set to n=200, not by code review
+    alone.**
+- What happened: `src/pipeline/agent.py` and `src/evaluation/run.py` were passing
+  `customer_text_raw` (still containing the leading `@AmazonHelp ` mention on nearly
+  every message) directly into `rule_classify()` and the TF-IDF retriever, instead of
+  `clean_text_preserve()`d text — the same normalization the retrieval index and regex
+  rules were built/tested against. At n=55 this was invisible (the 55-example subset
+  happened not to expose it badly); at n=200, `ACKNOWLEDGEMENT_FOLLOWUP` recall of
+  exactly 0.00 was the signal that something structural was wrong, not just "the regex
+  needs more keywords."
+- Why this matters as a decision-log entry: it's direct evidence that expanding golden-
+  set coverage isn't just about statistical power — it surfaces real bugs that a small,
+  curated subset can hide. Fixing it improved rule-classifier accuracy 35.5%→38.0% and
+  average retrieval relevance 0.498→0.534, for free, with no risk of overfitting (it's a
+  correctness fix, not a tuned heuristic).
+- Tradeoff: none identified; this is a straightforward bug fix, included here specifically
+  to model the practice of writing down *when a metric caught a real bug* as its own
+  decision-log-worthy event, not just final design choices.
+
+**16. What we deliberately did not build:** a UI/frontend, a production API server, a
     vector database, multi-language support, multi-turn dialogue *management* (vs. just
     reading prior-turn context), fine-tuning any model, and a fully-automated human-in-the-
     loop labeling pipeline. Each is a reasonable next step (see REPORT.md "One More Week")

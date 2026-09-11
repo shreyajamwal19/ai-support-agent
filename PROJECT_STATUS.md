@@ -10,7 +10,7 @@
       deterministic leakage-safe splits — `src/data/`
 - [x] Intent taxonomy (12 classes) derived from TF-IDF+KMeans clustering evidence —
       `INTENT_TAXONOMY.md`, `configs/intent_taxonomy.json`
-- [x] Golden evaluation set: 200 examples, stratified sampling, 55 independently
+- [x] Golden evaluation set: 200 examples, stratified sampling, all 200 independently
       (Claude-)reviewed to break evaluation circularity, tooling for full human review —
       `LABELING_GUIDE.md`, `scripts/06_review_golden_set.py`
 - [x] Baselines A (majority class) and B (TF-IDF+LogReg) — `src/intent/baselines.py`
@@ -27,13 +27,15 @@
 - [x] Failure analysis: 5 modes derived from real evaluation output — `REPORT.md` §8
 - [x] Report (all required sections) — `REPORT.md`
 - [x] Decision log (15 decisions) — `DECISIONS.md`
-- [x] Test suite: 31 tests, all passing — `tests/`
+- [x] Test suite: 36 tests, all passing — `tests/`
+- [x] Escalation policy v1.1/v1.2 + a real pipeline text-normalization bug found and
+      fixed while expanding the golden set to n=200 — `DECISIONS.md` #14/#15
 - [x] README with <15-min reproduction path (measured ~8-9 min) — `README.md`
 - [x] Final red-team review — `FINAL_REVIEW.md`
 
 ## Known, disclosed gaps (not attempted to hide)
-- Golden-set labels are AI-reviewed (Claude, this session), not independently
-  human-verified, for 55/200 examples; the remaining 145 are still rule-based provisional.
+- Golden-set labels are AI-reviewed (Claude, this session) for all 200/200 examples, not
+  independently human-verified by the assignment author.
 - LLM path (classification/generation/judge) implemented but never executed — no
   `ANTHROPIC_API_KEY` in the build sandbox.
 - English-only scope (~75% of reconstructed traffic).

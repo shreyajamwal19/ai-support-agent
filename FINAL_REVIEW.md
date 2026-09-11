@@ -22,15 +22,16 @@
    is reported rather than hidden.
 
 ## Biggest weaknesses (top 5)
-1. **The golden-set labels used for headline numbers are Claude-reviewed, not
+1. **All 200 golden-set labels used for headline numbers are Claude-reviewed, not
    independently human-verified.** This is the single largest validity gap. It's
    disclosed everywhere, but a reviewer should treat every accuracy/precision/recall
    number as provisional until real human labels exist.
 2. **No LLM was actually run.** The system's classification and generation quality
    ceiling is bounded by regex rules and TF-IDF, which is a real (not cosmetic)
    limitation on how good the drafted replies actually are.
-3. **n=55 is small.** Per-class metrics on 3-14 examples per class are noisy; confusion
-   matrices in `results.json` should be read as illustrative.
+3. **Rare-class metrics are still thin even at n=200.** `ABUSE_THREAT_ESCALATION_DEMAND`
+   has only 3 golden examples; confusion-matrix cells for rare classes in `results.json`
+   should be read as illustrative, not precise.
 4. **Baseline B is not independent of the rule classifier** — trained on the rule
    classifier's own silver labels, so the "baseline comparison" is weaker evidence than
    it looks at first glance (disclosed in `REPORT.md` §9 point 5).

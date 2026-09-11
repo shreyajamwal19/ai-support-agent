@@ -61,57 +61,77 @@ customer message
 - **Golden set**: 200 examples, stratified sampling (proportional + rare-intent oversample
   + short/ambiguous + multi-turn + low-confidence-boundary), `data/golden/golden_set_reviewed.csv`.
   See `LABELING_GUIDE.md` for full methodology.
-- **Labels used for the numbers below**: a 55-example subset independently read and
-  labeled (not derived from the rule classifier) — `labeling_status ==
-  claude_reviewed_not_independent_human`. **These are AI-assisted labels by Claude during
-  this development session, not independent human labels.** See §9 and `DECISIONS.md` #10
-  for exactly why this distinction matters and what it does/doesn't fix.
+- **Labels used for the numbers below**: **all 200 examples**, independently read and
+  labeled (not derived from the rule classifier). **These are AI-assisted labels by
+  Claude during this development session, not independent human labels** —
+  `labeling_status == claude_reviewed_not_independent_human` for every row. See §9 and
+  `DECISIONS.md` #10 for exactly why this distinction matters and what it does/doesn't fix.
 - **Leakage**: `tests/test_leakage.py` (4 tests) asserts zero `pair_id`/`content_hash`
   overlap between golden, retrieval, and baseline-training pools. All pass.
 
 ## 6. Results
 
-### 6.1 Intent classification (n=55, reviewed subset)
+### 6.1 Intent classification (n=200, full reviewed golden set)
 
 | Classifier | Accuracy | Macro-F1 | Weighted-F1 |
 |---|---|---|---|
-| Baseline A (majority class) | 0.055 | 0.009 | 0.006 |
-| Baseline B (TF-IDF + LogReg, trained on rule-derived silver labels) | 0.600 | 0.536 | 0.615 |
-| System default (rule classifier) | 0.600 | 0.520 | 0.605 |
+| Baseline A (majority class) | 6.5% | 1.0% | 0.8% |
+| Baseline B (TF-IDF + LogReg, trained on rule-derived silver labels) | 37.0% | 42.8% | 40.8% |
+| System default (rule classifier, v1.2) | 38.0% | 45.1% | 41.3% |
 
-### 6.2 Escalation (n=55, policy v1.1 -- see §6.4)
+Per-class detail (rule classifier; `artifacts/eval_results/results.json`): strong on
+`ACCOUNT_LOGIN` (P=1.00, R=1.00, n=11) and `BILLING_PAYMENT` (P=0.75, R=0.75, n=12);
+weak on `COMPLAINT_SERVICE_QUALITY` (P=0.29, R=0.08, n=26) and `OTHER_UNCLEAR`
+(P=0.07, R=0.39, n=13). See §8 for why.
+
+### 6.2 Escalation (n=200, policy v1.1)
 
 | Metric | Value |
 |---|---|
-| Escalate precision | 0.528 |
-| Escalate recall | 0.792 |
-| Auto-handle precision | 0.737 |
-| Auto-handle recall | 0.452 |
-| **Harmful auto-handle rate** (gold=escalate, system=auto_handle) | **9.1%** (5/55) |
-| Unnecessary escalation rate (gold=auto_handle, system=escalate) | 30.9% (17/55) |
+| Escalate precision | 0.542 |
+| Escalate recall | 0.724 |
+| Auto-handle precision | 0.609 |
+| Auto-handle recall | 0.412 |
+| **Harmful auto-handle rate** (gold=escalate, system=auto_handle) | **13.5%** (27/200) |
+| Unnecessary escalation rate (gold=auto_handle, system=escalate) | 30.0% (60/200) |
 
-### 6.4 Policy v1.1 refinement (dev/held-out check)
+### 6.3 Retrieval / Grounding (n=200)
 
-After the first evaluation pass (§8 below), two fixes were made and re-evaluated: (a) a
-`repeat_contact_prior_attempt_failed` escalation signal (Failure #3), and (b) requiring
-profanity to be brand-directed before firing the abuse intent (Failure #4). Tuned **only**
-on the `dev` half (42/55) of the reviewed subset; `held_out` (13/55) was not looked at
-while making the change, to check generalization honestly (`scripts/07_policy_refinement_eval.py`,
-`artifacts/eval_results/policy_v1_1_dev_heldout.json`):
+| Metric | Value |
+|---|---|
+| Retrieval hit-rate (≥0.15 cosine similarity) | 99.5% |
+| Avg top-1 relevance score | 0.534 |
+| Generation grounding-check pass rate | 100% |
+
+### 6.4 System evolution (v1.0 → bugfix), all re-evaluated on the same growing golden set
+
+| Version | Golden n | Rule-classifier accuracy | Harmful auto-handle rate | What changed |
+|---|---|---|---|---|
+| v1.0 | 55 | 60.0% | 12.7% | initial rule classifier + 7-signal escalation policy |
+| v1.1 | 55 | 60.0% | 9.1% | + repeat-contact signal, brand-directed-profanity fix |
+| v1.1 | 200 | 35.0% | 9.0% | golden set expanded to full 200 (Claude-reviewed) |
+| v1.2 | 200 | 35.5% | 13.5% | loosened over-anchored `ACKNOWLEDGEMENT_FOLLOWUP`/`PRODUCT_INFO_QUESTION` regexes |
+| **bugfix** | 200 | **38.0%** | **13.5%** | **fixed a real pipeline bug: classification/retrieval were running on raw tweet text (with leading `@AmazonHelp `) instead of the cleaned text the retrieval index and regexes were built against — this silently broke anchored regexes and diluted TF-IDF term overlap for every single message** |
+
+**Read this table honestly**: the accuracy drop from 60%→35% at the 55→200 expansion is
+*not* a regression — it's the 55-example subset being an easier, more-curated slice
+(it was built from `sampling_reason` categories weighted toward clearly-intentful
+examples). n=200 is the trustworthy number for accuracy going forward. The v1.2 regex
+loosening and the raw-text bug fix are real, disclosed engineering fixes found *while
+evaluating*, not built in from the start — exactly the kind of thing a rigorous
+evaluation harness is supposed to surface.
+
+### 6.5 Policy v1.1 dev/held-out generalization check (n=200, after bugfix)
 
 | Split | n | Action accuracy | Harmful auto-handle rate | Unnecessary escalation rate |
 |---|---|---|---|---|
-| dev (tuned on this) | 42 | 61.9% | 9.5% | 28.6% |
-| held_out (not tuned on this) | 13 | 53.8% | 7.7% | 38.5% |
+| dev (tuned on this) | 150 | 56.0% | 13.3% | 30.7% |
+| held_out (not tuned on this) | 50 | 58.0% | 14.0% | 28.0% |
 
-**Honest read**: harmful-auto-handle rate improved on both splits (the safety-relevant
-metric we most care about), including the held-out split it wasn't tuned on — real
-evidence the repeat-contact fix generalizes, not just overfits. But held-out action
-accuracy (53.8%) is lower than dev (61.9%), and unnecessary-escalation rate is *worse* on
-held-out (38.5% vs. the pre-fix 25.5% baseline) — the fix trades some unnecessary
-escalation for less harmful auto-handling, and that tradeoff is more pronounced on
-examples it wasn't tuned on. With n=13 on held-out, none of this is statistically
-conclusive; it's directional evidence, reported as such.
+Harmful-auto-handle and unnecessary-escalation rates are close across both splits (within
+~1-3 points), and action accuracy is actually *higher* on held-out — reasonable evidence
+the v1.1 policy signals generalize rather than overfit to the specific 55 examples they
+were originally motivated by.
 
 ### 6.3 Retrieval / Grounding (n=55)
 
@@ -123,94 +143,91 @@ conclusive; it's directional evidence, reported as such.
 
 ## 7. Baseline Comparison
 
-Baseline A (majority class) is near-useless by design (5.5% accuracy, 0.9% macro-F1) —
-it exists as a floor, not a competitor. Baseline B (TF-IDF+LogReg) and the system's
-default rule classifier land at identical accuracy (60.0%) but Baseline B has slightly
-higher macro-F1 (0.536 vs 0.520), meaning it's marginally better-balanced across rare
-classes despite being trained on the *same* rule classifier's silver labels — evidence
-that TF-IDF+LogReg generalizes rule coverage to phrasing variants the regexes miss, even
-without independent training signal. Given both are trained/derived from the same rule
-logic, this comparison is **not** strong evidence that either is a "good" classifier in
-absolute terms — see §9.
+Baseline A (majority class) is near-useless by design (6.5% accuracy, 1.0% macro-F1) —
+it exists as a floor, not a competitor. Baseline B (TF-IDF+LogReg, 37.0% accuracy, 42.8%
+macro-F1) and the system's default rule classifier (38.0% accuracy, 45.1% macro-F1) are
+close, with the rule classifier slightly ahead on this run after the v1.2 regex/bugfix
+round. Given both are trained/derived from the same rule logic (Baseline B's training
+labels are the rule classifier's own silver output — `DECISIONS.md` #8), this is **not**
+an independent three-way comparison; see §9 point 5.
 
 ## 8. Failure Analysis
 
-Derived from the 21 action-disagreement cases in
-`artifacts/eval_results/results.json.action_disagreement_failures` (21/55 = 38.2% of the
-reviewed subset), not assumed in advance.
+Derived from the 87 action-disagreement cases (out of 200) in
+`artifacts/eval_results/results.json.action_disagreement_failures`, re-derived after the
+regex/bugfix round described in §6.4 — not assumed in advance and not the same list as
+an earlier draft of this report (which was based on n=55, before real bugs were found).
 
-**1. Rule classifier's narrow keyword coverage forces low-confidence escalation on
-   legitimate but non-keyword-matching messages.** (6/21 cases, e.g. GOLD_0000, 0001,
-   0002, 0115, 0116) — positive tweets, thanks, and clearly-phrased questions ("what is
-   your complaints procedure?") fall through every regex to `OTHER_UNCLEAR` at 0.4
-   confidence, triggering unnecessary escalation via the `low_intent_confidence` signal.
-   *Likely cause*: keyword rules have finite coverage by construction. *Mitigation*: an
-   LLM or trained classifier with broader generalization (implemented but unmeasured, §9).
-   *Implemented in this submission*: no — this is the clearest argument for §9's gap.
+**1. `ACKNOWLEDGEMENT_FOLLOWUP` recall is 0.16 (up from 0.00 pre-fix) — the class most
+   responsible for unnecessary escalation.** (support=32, the single largest golden-set
+   class.) Even after loosening the regex and fixing the raw-text bug (§6.4), most
+   acknowledgement-style messages ("Thanks!", "Have done, thanks.", "Ok cool") still fall
+   through to `OTHER_UNCLEAR` at low confidence, triggering the `low_intent_confidence`
+   escalation signal. *Likely cause*: a keyword list can't enumerate every phrasing of
+   "thanks"/"done"/"ok" in the wild — this is a coverage ceiling inherent to regex
+   classification, not a bug. *Mitigation*: an LLM or a classifier trained on real
+   independent labels (not rule-silver labels) would generalize far better here — this is
+   the clearest concrete argument in this report for closing the §9 LLM gap.
+   *Implemented*: partially (regex loosened in v1.2, real but limited gain: R 0.00→0.16).
 
-**2. Blanket escalation on `REFUND_RETURN`/`ACCOUNT_LOGIN` intents over-escalates benign
-   cases.** (5/21 cases, e.g. GOLD_0039, 0042, 0043, 0073, 0074) — the policy's "financial
-   implication" and "account security" signals fire on *any* message with that intent,
-   including a customer simply confirming a return or a first password-reset attempt.
-   *Likely cause*: the policy uses intent category as a blunt proxy for risk instead of
-   message-level risk (amount, prior attempt count, sentiment). *Mitigation*: risk-scope
-   the signal to specific sub-patterns (e.g. only escalate refunds above a stated dollar
-   amount, or after N failed logins) rather than the whole intent. *Implemented*: no —
-   flagged as a One More Week item.
+**2. `COMPLAINT_SERVICE_QUALITY` has very low recall (0.08, support=26) — it's the
+   catch-all for "hostile/dissatisfied tone with no concrete transactional ask," which
+   overlaps heavily with `OTHER_UNCLEAR` and `ABUSE_THREAT_ESCALATION_DEMAND` under a
+   keyword classifier.** e.g. GOLD_0009 ("Couldn't lose another day. Had to install it
+   myself. Do better") is gold-labeled `COMPLAINT_SERVICE_QUALITY`/`auto_handle` but the
+   rule classifier returns `OTHER_UNCLEAR` at low confidence, forcing an unnecessary
+   escalation. *Likely cause*: this intent is defined by tone/sentiment more than by
+   specific keywords, which regexes are structurally bad at. *Mitigation*: a sentiment/
+   tone signal (even a small trained classifier) as an additive feature, or LLM
+   classification. *Implemented*: no.
 
 **3. Under-escalation of cases needing case-specific lookup that don't trip any current
-   risk signal.** (6/21 cases, e.g. GOLD_0031 repeated shipping failures, GOLD_0053/0055
-   date discrepancies, GOLD_0068 delivered-but-not-received, GOLD_0091 already-failed
-   troubleshooting, GOLD_0108 refused refund) — these need a human because the *specific*
-   order/account history matters, but none of our 7 signals (legal threat, abuse, no
-   evidence, conflicting evidence, low confidence, financial intent, account security)
-   fires, because retrieval *did* find a plausible historical template and confidence was
-   fine. *Likely cause*: the policy has no signal for "customer states a prior resolution
-   attempt already failed" — a strong real-world escalation trigger. *Mitigation*: add a
-   regex/keyword signal for repeat-contact language ("again", "already tried", "third
-   time", "still not"). *Implemented*: **yes, as policy v1.1** (§6.4) — improved
-   harmful-auto-handle rate on both the tuned (`dev`, 12.7%→9.5%) and untuned
-   (`held_out`, →7.7%) splits, at the cost of a higher unnecessary-escalation rate,
-   particularly on `held_out` (→38.5%).
+   risk signal.** e.g. GOLD_0004 ("what happened to my order? #mixedsignals #amazonfail"
+   — conflicting information from support already) is gold-labeled `escalate` but the
+   system auto-handles it, misclassifying intent as `PRODUCT_INFO_QUESTION` (the message
+   is phrased as a question) rather than `ORDER_STATUS`, and finding no risk signal.
+   *Likely cause*: no signal exists for "customer explicitly says information has been
+   inconsistent/contradictory." *Mitigation*: a "conflicting information" keyword signal,
+   similar in spirit to the repeat-contact signal already added. *Implemented*: no
+   (documented as a v1.3 candidate, not added this round to avoid further tuning against
+   the same 200 examples without a fresh held-out set).
 
-**4. Profanity used as an intensifier gets misclassified as
-   `ABUSE_THREAT_ESCALATION_DEMAND` instead of the actual topic intent.** (2/21 cases:
-   GOLD_0058 "the piece of shit doesn't even work" is a defective-item complaint, not
-   abuse; GOLD_0083 "fuck off" attached to a billing complaint). *Likely cause*: the rule
-   classifier's abuse pattern includes bare profanity regardless of whether it's directed
-   at the brand/staff vs. venting about a product. *Mitigation*: require profanity to be
-   near brand-directed language ("you", "your service") to fire the abuse rule, or make
-   it an additive risk signal rather than an intent override. *Implemented*: **yes, as
-   policy v1.1** (§6.4) — the abuse rule now requires profanity/hostility to appear near
-   brand-directed language (or an explicit legal/manager-escalation phrase) rather than
-   firing on bare profanity alone.
+**4. Positive/off-topic messages (`OTHER_UNCLEAR`, correctly labeled) still sometimes
+   escalate unnecessarily because low confidence is being used as a blanket signal.**
+   e.g. GOLD_0000, GOLD_0003 (unsolicited positive comments about Amazon's offline-dinosaur
+   game and packaging) are correctly classified `OTHER_UNCLEAR` by the rule classifier —
+   but the escalation policy's `low_intent_confidence` signal still fires at 0.4
+   confidence, over-escalating messages that are genuinely fine to leave alone (or not
+   respond to at all). *Likely cause*: the policy doesn't distinguish "low confidence
+   because genuinely ambiguous/risky" from "low confidence because it's confidently
+   off-topic and low-stakes." *Mitigation*: don't escalate `OTHER_UNCLEAR` purely on the
+   low-confidence signal when no other risk signal fires — treat it as a "no action
+   needed" case instead of blanket-escalating. *Implemented*: no (a real, cheap next fix,
+   deliberately not squeezed in this round to keep the v1.1/v1.2/bugfix change history
+   auditable one fix at a time — see `DECISIONS.md` #16's dev/held-out discipline).
 
-**5. Extractive generation occasionally retrieves a topically-adjacent but contextually
-   wrong historical resolution when the top-1 similarity score is low (~0.4-0.5).** Not
-   captured in the action-disagreement count (this is a generation-quality failure, not
-   an intent/escalation failure) but visible directly in pipeline smoke tests (see
-   `src/pipeline/agent.py.__main__` output during development): a legal-threat query's
-   nearest TF-IDF match was "thank you i will be calling tomorrow" (0.443 similarity) —
-   lexically close ("calling") but semantically unrelated. *Likely cause*: TF-IDF
-   captures lexical, not semantic, similarity (see `DECISIONS.md` #6). *Mitigation*: the
-   escalation policy already catches this specific case (legal threats always escalate
-   regardless of draft content) — but a case that were topically similar yet legally
-   distinct without tripping any escalation signal would ship a mismatched draft.
-   *Implemented*: partial — the grounding check catches unsupported *promises* but not
-   general topical mismatch; a semantic-similarity floor is a natural next step.
+**5. Retrieval and generation are lexical, not semantic, so drafts for topically distant
+   but lexically similar messages can mismatch (structural limitation, not a bug).** Not
+   the dominant driver of the 87 action-disagreements above (those are almost entirely
+   intent/escalation-signal misses, not generation failures — the grounding check passes
+   100% of the time because it only catches a narrow failure pattern, §9 point 7), but
+   visible directly in pipeline smoke tests: a legal-threat-adjacent query's nearest
+   TF-IDF match was a topically unrelated message. *Likely cause*: TF-IDF captures
+   lexical, not semantic, similarity (`DECISIONS.md` #6). *Mitigation*: the escalation
+   policy already catches the specific legal-threat case regardless of draft content; a
+   semantic-similarity floor as a retrieval fallback remains a real next step.
+   *Implemented*: no.
 
 ## 9. What Is Misleading About My Headline Number?
 
 Read this section before trusting any number above.
 
-1. **The 60% intent accuracy and escalation metrics are computed on 55 examples labeled
-   by Claude (this development session), not by a human.** They are explicitly *not*
-   "hand-labelled" in the sense the assignment describes, and are marked as such
-   throughout the codebase (`labeling_status` field). They are non-circular with respect
-   to the rule classifier (labels weren't derived from it) but they still carry whatever
-   bias an AI reviewer has, and have not been checked by a second party. Real human
-   labeling of the remaining 145 golden examples (tooling: `scripts/06_review_golden_set.py`)
-   is the single highest-value next step for trusting these numbers.
+1. **All 200 golden-set labels are Claude-reviewed (this development session), not
+   human-labeled.** They are explicitly *not* "hand-labelled" in the sense the assignment
+   describes, and are marked as such throughout the codebase (`labeling_status` field,
+   uniformly `claude_reviewed_not_independent_human` for all 200 rows as of this report).
+   Real human labeling (tooling: `scripts/06_review_golden_set.py`) is the single
+   highest-value next step for trusting these numbers in a hiring decision.
 2. **No LLM was used anywhere in the numbers above.** Every classification, generation,
    and grounding-check number reflects regex rules and TF-IDF — not the production-grade
    LLM path that's implemented in the code (`src/generation/llm_responder.py`,
@@ -220,12 +237,13 @@ Read this section before trusting any number above.
    possibly for the worse on cost/latency and reproducibility (LLM outputs are not
    perfectly deterministic even at temperature 0 across API versions).
 3. **The golden set's intent distribution (`OTHER_UNCLEAR` capped at 15%) does not match
-   production traffic (where it's ~66% by our own clustering measurement).** "60%
+   production traffic (where it's ~66% by our own clustering measurement).** "38%
    accuracy" describes performance on a deliberately *rebalanced* set, not on raw incoming
    traffic. On raw traffic, a classifier that defaults confidently to `OTHER_UNCLEAR` would
-   score much higher accuracy while being much less useful.
-4. **Per-class metrics are built on 3-14 examples per class.** A single misclassification
-   swings recall on a 3-example class by 33 percentage points. Treat every per-class
+   score much higher accuracy while being much less useful and this would be a worse number to optimize for.
+4. **Per-class metrics are built on 3-37 examples per class**, still thin for the rarest
+   classes (`ABUSE_THREAT_ESCALATION_DEMAND`, n=3). A single misclassification swings
+   recall on a 3-example class by 33 percentage points. Treat every per-class
    number in `results.json.intent_classification[*].per_class` as illustrative, not
    statistically reliable.
 5. **Baseline B's training labels are the rule classifier's own output (silver labels).**

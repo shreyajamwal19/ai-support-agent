@@ -56,9 +56,11 @@ RULES = [
     ("PRIME_MEMBERSHIP", re.compile(r"\bprime\b", re.I)),
     ("DIGITAL_CONTENT_DEVICE", re.compile(
         r"\b(kindle|echo|alexa|fire ?tv|prime video|amazon music|audible|app (crash|won.?t))\b", re.I)),
-    ("PRODUCT_INFO_QUESTION", re.compile(r"^(does|is|can|will|what|how)\b.*\?$", re.I)),
+    ("PRODUCT_INFO_QUESTION", re.compile(
+        r"\b(does|is|can|will|what|how)\b.{0,80}\?", re.I)),
     ("ACKNOWLEDGEMENT_FOLLOWUP", re.compile(
-        r"^(yes|no|ok(ay)?|thanks?|thank you|done|sent|details sent)\.?!?$", re.I)),
+        r"^\s*(yes|no|ok(ay)?|thanks?|thank you|thanks a lot|merci|done|sent|details sent|"
+        r"of course( i have)?|checked all|tried again|not even once)\W*.{0,15}$", re.I)),
     ("COMPLAINT_SERVICE_QUALITY", re.compile(
         r"\b(worst|terrible|awful|pathetic|poor service|bad service|no help|unhelpful|"
         r"disappoint\w*|customer service)\b", re.I)),

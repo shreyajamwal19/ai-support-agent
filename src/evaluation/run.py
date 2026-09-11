@@ -19,6 +19,7 @@ from sklearn.metrics import (accuracy_score, f1_score, precision_recall_fscore_s
                               confusion_matrix, precision_score, recall_score)
 
 from src.intent.rule_classifier import classify as rule_classify
+from src.data.reconstruct import clean_text_preserve
 from src.intent.baselines import MajorityClassBaseline, TfidfLogRegBaseline
 from src.retrieval.tfidf_retriever import TfidfRetriever
 from src.escalation.policy import decide as escalation_decide
@@ -84,6 +85,9 @@ def main(config_path):
     retriever = TfidfRetriever().load()
 
     texts = golden["customer_text_raw"].fillna("").tolist()
+    # classify/retrieve on cleaned text -- same normalization the retrieval index and
+    # rule regexes were built against (see src/pipeline/agent.py bug-fix note, DECISIONS.md #17)
+    clean_texts = [clean_text_preserve(t) for t in texts]
     gold_intent = golden["gold_intent"].tolist()
     gold_action = golden["gold_action"].tolist()
 
@@ -91,15 +95,15 @@ def main(config_path):
     train_pool = pd.read_parquet("data/processed/baseline_eval_pool_en.parquet")
     silver = train_pool["customer_text_clean"].apply(rule_classify).apply(lambda d: d["intent"])
     baseline_a = MajorityClassBaseline().fit(silver)
-    preds_a = baseline_a.predict(texts)
+    preds_a = baseline_a.predict(clean_texts)
 
     # --- Intent: rule classifier (production default) ---
-    rule_preds = [rule_classify(t)["intent"] for t in texts]
-    rule_confs = [rule_classify(t)["confidence"] for t in texts]
+    rule_preds = [rule_classify(t)["intent"] for t in clean_texts]
+    rule_confs = [rule_classify(t)["confidence"] for t in clean_texts]
 
     # --- Intent: Baseline B (TF-IDF + LogReg) ---
     baseline_b = TfidfLogRegBaseline().load()
-    preds_b = list(baseline_b.predict(texts))
+    preds_b = list(baseline_b.predict(clean_texts))
 
     intent_results = [
         eval_intent_classifier("baseline_A_majority_class", preds_a, gold_intent),
@@ -112,7 +116,7 @@ def main(config_path):
     agent = SupportAgent(retriever=retriever)
     pipeline_outputs = []
     for t in texts:
-        out = agent.handle(t, exclude_pair_ids=exclude_ids)
+        out = agent.handle(t, exclude_pair_ids=exclude_ids)  # agent cleans internally
         pipeline_outputs.append(out)
 
     preds_action = [o["action"] for o in pipeline_outputs]
